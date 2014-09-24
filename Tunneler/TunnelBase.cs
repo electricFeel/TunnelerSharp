@@ -5,6 +5,7 @@ using System.Net;
 using System.Text;
 using C5;
 using Sodium;
+using Tunneler.Comms;
 using Tunneler.Packet;
 using Tunneler.Pipe;
 
@@ -25,6 +26,7 @@ namespace Tunneler
     {
         #region Members
         protected TunnelSocket _socket;
+        internal CongestionControlBase congestionController;
         #endregion
 
         public IPEndPoint RemoteEndPoint { get; protected set; }
@@ -80,6 +82,7 @@ namespace Tunneler
             this._socket = socket;
             this.ID = tid;
             this.ActivePipes = new TreeDictionary<uint, PipeBase>();
+            this.congestionController = new NoCongestionControl(_socket, 250, 500, 1, 500);
         }
 
         public TunnelBase(TunnelSocket socket)
@@ -87,6 +90,7 @@ namespace Tunneler
             this._socket = socket;
             this.ID = Common.RemoveTIDFlags(BitConverter.ToUInt64(SodiumCore.GetRandomBytes(8), 0));
             this.ActivePipes = new TreeDictionary<uint, PipeBase>();
+            this.congestionController = new NoCongestionControl(_socket, 250, 500, 1, 500);
         }
 
         /// <summary>
@@ -185,12 +189,13 @@ namespace Tunneler
         /// <summary>
         /// Gets the Maximum transmission unit. This has to be LESS the payload size.
         /// It is used by the Pipes themselves to determine how to split 
-        /// their data and how to arrange the packets. 
+        /// their data and how to arrange the packets. This is equivalent to the
+        /// MSS (Maximum Segment Size) in TCP based systems.
         /// </summary>
         /// <returns>The MT.</returns>
         public virtual UInt16 GetMaxPayloadSize()
         {
-            return 1564 - 86;
+            return 1500 - (86 + 20);
         }
 
 

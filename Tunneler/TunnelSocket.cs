@@ -10,6 +10,15 @@ using Tunneler.Packet;
 
 namespace Tunneler
 {
+    public interface IPacketSender
+    {
+        /// <summary>
+        /// Enqueues the send GenericPacket on the send queue.
+        /// </summary>
+        /// <param name="p">P.</param>
+        void SendPacket(GenericPacket p);
+    }
+
     /// <summary>
     /// A TunnelSocket takes care of accepting new connection from a abstractTunnel or pushing 
     /// data to already established tunnels. In this role it abstracts away the specifics 
@@ -19,7 +28,7 @@ namespace Tunneler
     /// 
     /// Each abstractTunnel instance runs in its own thread. 
     /// </summary>
-    public class TunnelSocket
+    public class TunnelSocket : IPacketSender
     {
         //private static Logger logger = LogManager.GetCurrentClassLogger();
 

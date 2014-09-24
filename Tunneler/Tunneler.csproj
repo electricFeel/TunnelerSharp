@@ -46,6 +46,8 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Comms\CongestionControlBase.cs" />
+    <Compile Include="Comms\NoCongestionControl.cs" />
     <Compile Include="Pipe\PipeBase.cs" />
     <Compile Include="Pipe\ControlPipe.cs" />
     <Compile Include="Pipe\DuplexPipe.cs" />
@@ -61,6 +63,7 @@
     <Compile Include="TunnelSocket.cs" />
     <Compile Include="Pipe\SecureDuplexPipe.cs" />
     <Compile Include="TunnelBase.cs" />
+    <Compile Include="Comms\AIMDCongestionControl.cs" />
   </ItemGroup>
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

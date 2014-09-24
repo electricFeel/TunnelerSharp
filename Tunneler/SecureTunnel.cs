@@ -46,14 +46,6 @@ namespace Tunneler
             mCurNonce = SodiumCore.GetRandomBytes(24);
         }
 
-        private void GenerateAndSetKeys()
-        {
-            mKeyPair = PublicKeyBox.GenerateKeyPair();
-            mCurSeq = BitConverter.ToUInt32(SodiumCore.GetRandomBytes(4), 0);
-            //mCurNonce = SodiumCore.GetRandomBytes(24);
-        }
-
-
         private TunnelState State
         {
             get { return _state; }
@@ -222,28 +214,28 @@ namespace Tunneler
                         this.EncryptAndSendPacket(this.bufferedEncryptedPackets.Dequeue());
                     }
                     break;
-                case TunnelState.Connected:
-                    Debug.Assert(recipentEPK != null);
-                    if (p.CipherText.Length > 0)
-                    {
-                        if (p.DecryptPacket(mKeyPair.PrivateKey, recipentEPK))
-                        {
-                            //todo: handle out of order packets here and send acks
-                            PipeBase connection;
-                            UInt32 cid = p.CID;
-                            if (cid == 0)
-                            {
-                                ControlPipe.HandlePacket(p);
-                            }
-                            else
-                            {
-                                if (ActivePipes.Find(ref cid, out connection))
-                                {
-                                    connection.HandlePacket(p);
-                                }
-                            }
-                        }
-                    }
+				case TunnelState.Connected:
+					Debug.Assert (recipentEPK != null);
+					if (p.CipherText.Length > 0) {
+						if (p.DecryptPacket (mKeyPair.PrivateKey, recipentEPK)) {
+							//todo: handle out of order packets here and send acks
+							PipeBase connection;
+							UInt32 cid = p.CID;
+							if (p.Ack > 0) {
+								this.congestionController.Acked (p.Ack);
+							}
+							//only handle packets that have a payload or RPCs
+							if (p.Payload.Length > 0 || p.RPCs.Count > 0) {
+								if (cid == 0) {
+									ControlPipe.HandlePacket (p);
+								} else {
+									if (ActivePipes.Find (ref cid, out connection)) {
+										connection.HandlePacket (p);
+									}
+								}
+							}
+						}
+					}
                     break;
                 default:
                     throw new ArgumentOutOfRangeException();
@@ -253,12 +245,23 @@ namespace Tunneler
         public override void SendPacket(GenericPacket p)
         {
             p.destination = RemoteEndPoint;
-            TunnelSocket.SendPacket(p);
-            if (_guaranteedTransmission)
-            {
-                //add this to a queue
-            }
+            //TunnelSocket.SendPacket(p);
+            this.congestionController.SendPacket(p);
         }
+
+		/// <summary>
+		/// Sends a single Ack out 
+		/// </summary>
+		/// <param name="seq">Seq.</param>
+		private void SendAck(UInt32 seq){
+			EncryptedPacket p = new EncryptedPacket (this.ID, 0);
+			p.Ack = seq;
+			//How should we handle ack packets? Should we add them to the Ack queue?
+			p.Nonce = GetNextNonce();
+			p.Seq = this.GetNextSeq();
+			p.EncryptPacket(mKeyPair.PrivateKey, recipentEPK);
+			this.congestionController.SendAck (p);
+		}
 
         public EncryptedPacket MakeHelloPacket()
         {
@@ -390,7 +393,7 @@ namespace Tunneler
 
         private bool _guaranteedTransmission = false;
         private byte[] mCurNonce;
-        private UInt32 mCurSeq;
+        private UInt32 mCurSeq = 1;
         public KeyPair mKeyPair;
         internal KeyPair mNextKeyPair;
         private UInt64 mNextTID;
