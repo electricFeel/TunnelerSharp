@@ -36,10 +36,10 @@ namespace TunnelerTestWin
             Assert.IsTrue(this.congestion.CongestionWindowSize == 2);
             this.congestion.SendPacket(packet1);
             this.congestion.Acked(packet1.Seq);
-            Assert.IsTrue(this.congestion.CongestionWindowSize == 3);
+            Assert.IsTrue(this.congestion.CongestionWindowSize == 4);
             this.congestion.SendPacket(packet2);
             this.congestion.Acked(packet2.Seq);
-            Assert.IsTrue(this.congestion.CongestionWindowSize == 4);
+			Assert.IsTrue(this.congestion.CongestionWindowSize == 5, String.Format ("Expected congestion window to be {0} but was {1}", 5, this.congestion.CongestionWindowSize));
             this.congestion.SendPacket(packet3);
             this.congestion.Acked(packet3.Seq);
             Assert.IsTrue(this.congestion.CongestionWindowSize == 5);
@@ -54,7 +54,7 @@ namespace TunnelerTestWin
             Assert.IsTrue(this.congestion.CongestionWindowSize == 2);
             this.congestion.SendPacket(packet7);
             this.congestion.Acked(packet7.Seq);
-            Assert.IsTrue(this.congestion.CongestionWindowSize == 3, "Congestion window size should be 3");
+            Assert.IsTrue(this.congestion.CongestionWindowSize == 4, "Congestion window size should be 3");
             
         }
         [Test]

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using Tunneler.Comms;
+using System.Security.Principal;
 
 namespace Tunneler
 {
@@ -22,9 +23,9 @@ namespace Tunneler
             Linear
         }
 
-        private uint mMaxCongestionWindow;
+		private UInt16 mMaxCongestionWindow;
         internal AIMDCongestionControl (IPacketSender packetSender, ushort interval, ushort datagramSize, 
-                                        ushort congestionWindowSize = 1, int retransmitInterval = 50, uint maxCongestionWindow = 20):
+                                        ushort congestionWindowSize = 1, int retransmitInterval = 50, ushort maxCongestionWindow = 20):
             base(packetSender, interval, datagramSize, congestionWindowSize, retransmitInterval)
         {
             this.mMaxCongestionWindow = maxCongestionWindow;
@@ -37,7 +38,8 @@ namespace Tunneler
             //todo: see if the ack is out of sequence
             if (this.CongestionWindowSize < this.mMaxCongestionWindow)
             {
-				this.ChangeCongestionWindow((UInt16) (this.CongestionWindowSize + this.CongestionWindowSize));
+				ushort newWindow = (ushort)Math.Min (this.CongestionWindowSize * 2, mMaxCongestionWindow);
+				this.ChangeCongestionWindow((UInt16)newWindow);
             }
         }
 
