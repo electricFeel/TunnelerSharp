@@ -6,23 +6,29 @@ namespace TunnelerTestWin.mocks
 {
     class TunnelSocketMock : TunnelSocket
     {
-        private Action<GenericPacket> packetHandle;
+        private Action<GenericPacket> packetOutHandle;
+        private Action<GenericPacket> packetInHandle;
 
         public TunnelSocketMock()
         {
             //don't start it
         }
 
-        public void InterceptPacket(Action<GenericPacket> handle)
+        public void InterceptOutgoingPacket(Action<GenericPacket> handle)
         {
-            this.packetHandle = handle;
+            this.packetOutHandle = handle;
+        }
+
+        public void InterceptIncomingPacket(Action<GenericPacket> handle)
+        {
+            this.packetInHandle = handle;
         }
 
         public override void SendPacket(GenericPacket p)
         {
-            if (this.packetHandle != null)
+            if (this.packetOutHandle != null)
             {
-                this.packetHandle.Invoke(p);
+                this.packetOutHandle.Invoke(p);
             }
         }
 
@@ -36,6 +42,12 @@ namespace TunnelerTestWin.mocks
             }
         }
 
-
+        public void HandlePacket(GenericPacket p)
+        {
+            if (this.packetInHandle != null)
+            {
+                this.packetInHandle.Invoke(p);
+            }
+        }
     }
 }

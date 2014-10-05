@@ -60,6 +60,9 @@ namespace TunnelerTestWin
         }
     }
 
+	/// <summary>
+	/// A mock object inteded to intercept packets as their sent from the congestion controller.
+	/// </summary>
     class TunnelSocketSendIntercept : TunnelSocket
     {
         private Action<GenericPacket> sendInterceptor;
@@ -75,10 +78,6 @@ namespace TunnelerTestWin
             {
                 sendInterceptor.Invoke(p);
             }
-            else
-            {
-                base.SendPacket(p);
-            }
         }
 
         public void SetSendInterceptor(Action<GenericPacket> action)
@@ -86,5 +85,6 @@ namespace TunnelerTestWin
             this.sendInterceptor = action;
         }
 
+        
     }
 }

@@ -55,9 +55,14 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CongestionTests\CongestionControlTestBase.cs" />
+    <Compile Include="CongestionTests\CongestionReliablityTestBase.cs" />
+    <Compile Include="CongestionTests\SimpleCongestionControlTest.cs" />
     <Compile Include="ControlPipeTest.cs" />
     <Compile Include="DuplexPipeTest.cs" />
     <Compile Include="EndToEndTunnelTest.cs" />
+    <Compile Include="mocks\GenericPacketMock.cs" />
+    <Compile Include="mocks\TunnelCongestionControllerMock.cs" />
     <Compile Include="mocks\TunnelMock.cs" />
     <Compile Include="mocks\TunnelSocketMock.cs" />
     <Compile Include="Program.cs" />
@@ -96,7 +101,5 @@
   <Target Name="AfterBuild">
   </Target>
   -->
-  <ItemGroup>
-    <Folder Include="CongestionTests\" />
-  </ItemGroup>
+  <ItemGroup />
 </Project>

@@ -33,7 +33,7 @@ namespace TunnelerTestWin
         public void SendHelloTest()
         {
             bool trigger1 = false;
-            tunnelSocket.InterceptPacket(p =>
+            tunnelSocket.InterceptOutgoingPacket(p =>
             {
                 trigger1 = true;
                 Assert.IsTrue(p.HasEPK);
@@ -51,7 +51,7 @@ namespace TunnelerTestWin
             SecureTunnel t = new SecureTunnel(this.tunnelSocket);
             bool triggered = false;
             byte[] server_epk = new byte[0];
-            this.tunnelSocket.InterceptPacket(p =>
+            this.tunnelSocket.InterceptOutgoingPacket(p =>
             {
                 Assert.IsNotNull(p.EuphemeralPublicKey);
                 Assert.IsTrue(p.EuphemeralPublicKey.Length == 32);
@@ -74,7 +74,7 @@ namespace TunnelerTestWin
             Assert.That(t.mKeyPair.PublicKey.SequenceEqual(server_epk));
             triggered = false;
 
-            this.tunnelSocket.InterceptPacket(p =>
+            this.tunnelSocket.InterceptOutgoingPacket(p =>
             {
                 EncryptedPacket packet = (EncryptedPacket)p;
                 Assert.IsNotNull(packet.ToBytes());
@@ -123,7 +123,7 @@ namespace TunnelerTestWin
             publicKey = new byte[0];
             this.SetupTunnelComms(t, out privateKey, out publicKey);
 
-            tunnelSocket.InterceptPacket(p =>
+            tunnelSocket.InterceptOutgoingPacket(p =>
             {
                 //we should recieve a close connection packet
                 EncryptedPacket packet = (EncryptedPacket)p;
@@ -144,7 +144,7 @@ namespace TunnelerTestWin
         private void SetupTunnelComms(SecureTunnel tunnel, out byte[] privateKey, out byte[] publicKey)
         {
             byte[] server_epk = new byte[0];
-            this.tunnelSocket.InterceptPacket(p =>
+            this.tunnelSocket.InterceptOutgoingPacket(p =>
             {
                 Assert.IsNotNull(p.EuphemeralPublicKey);
                 Assert.IsTrue(p.EuphemeralPublicKey.Length == 32);
