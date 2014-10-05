@@ -191,11 +191,14 @@ namespace Tunneler
         /// It is used by the Pipes themselves to determine how to split 
         /// their data and how to arrange the packets. This is equivalent to the
         /// MSS (Maximum Segment Size) in TCP based systems.
+		/// 
+		/// This should be handled by the Congestion Control.
         /// </summary>
         /// <returns>The MT.</returns>
         public virtual UInt16 GetMaxPayloadSize()
         {
-            return 1500 - (86 + 20);
+            //return 1500 - (86 + 20);
+			return 576;
         }
 
 

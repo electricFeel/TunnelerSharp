@@ -6,6 +6,9 @@ using Tunneler.Packet;
 
 namespace Tunneler.Comms
 {
+	/// <summary>
+	/// No attempts at congestion control or reliablity
+	/// </summary>
 	class NoCongestionControl:CongestionControlBase
     {
         public NoCongestionControl(IPacketSender packetSender, ushort interval, ushort datagramSize, ushort congestionWindowSize = 1, int retransmitInterval = 500) : base(packetSender, interval, datagramSize, congestionWindowSize, retransmitInterval)
@@ -14,7 +17,7 @@ namespace Tunneler.Comms
 
 		protected override void OnAcked (TimestampedPacket acked)
 		{
-
+			//do nothing
 		}
 
         /// <summary>
@@ -28,11 +31,15 @@ namespace Tunneler.Comms
 
 		#region implemented abstract members of CongestionControlBase
 
-		protected override void OnPacketDropped (int totalPackets, int packetsDropped)
+		protected override void OnPacketsDropped (int totalPackets, int packetsDropped)
 		{
-
+			//do nothing
 		}
 
+		internal new bool CheckPacket (GenericPacket p){
+			//no congestion control always returns true for the check packet
+			return true;
+		}
 		#endregion
     }
 }

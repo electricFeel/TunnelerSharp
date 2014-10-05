@@ -4,51 +4,58 @@ using System.Timers;
 using C5;
 using Tunneler.Packet;
 using Timer = System.Timers.Timer;
-using System.IO;
+using System.Diagnostics;
+using System.Collections.Concurrent;
+using System.Collections;
 
 namespace Tunneler.Comms
 {
-    internal struct TimestampedPacket
+    public struct TimestampedPacket
     {
         internal GenericPacket packet;
         internal Int32 lastTransmissionTime;
+        internal Int32 initialTransmissionTime;
         internal UInt16 retransmissionCount;
-		internal bool timedOut;
-	}
+        internal bool timedOut;
+    }
 
     /// <summary>
-    /// Congestion control base class
+    /// Congestion control base class. A congestion control class is responsible for maintaing the 
+    /// congestion window (in bytes) and the mtu size. It can use a number of signals to determine cwnd and
+    /// mtu size including latency, packet loss, ICMP messages.
+    /// 
+    /// We're going to have to eventually move all the logic for handling messages and encryption here
+    /// but lets keep the design as is for now (i.e. we're going to need a shared object encryptor with
+    /// the SecureTunnel).
     /// </summary>
-    internal abstract class CongestionControlBase
+    public abstract class CongestionControlBase
     {
-		/*
-		 * Only the sending party cares about acks, therefore acks need to be a special
-		 * type of message that is simply a passthrough to the congestion control, i.e. one that
-		 * doesn't require a return from the client. 
-		*/
-        private object l_sendQueue = new object();
-        private object l_ackQueue = new object();
-        private ReaderWriterLockSlim rw_ackQueue = new ReaderWriterLockSlim();
-        private ReaderWriterLockSlim rw_sendQueue = new ReaderWriterLockSlim();
-		private ReaderWriterLockSlim rw_congestionWindow = new ReaderWriterLockSlim ();
+        const float RTT_CONST = 0.5f;
+        /*
+         * Only the sending party cares about acks, therefore acks need to be a special
+         * type of message that is simply a passthrough to the congestion control, i.e. one that
+         * doesn't require a return from the client. 
+        */
+        private ReaderWriterLockSlim rw_rttCalc = new ReaderWriterLockSlim();
+        private ReaderWriterLockSlim rw_congestionWindow = new ReaderWriterLockSlim();
 
         private Timer timer;
+        protected UInt32 lastSeqNum = 0;
         protected IPacketSender packetSender;
 
-        protected IQueue<TimestampedPacket> sendQueue;
-		protected IDictionary<UInt32, TimestampedPacket> ackQueue;
+		internal ConcurrentQueue<TimestampedPacket> sendQueue;
+		internal ConcurrentDictionary<UInt32, TimestampedPacket> acks;
+        protected Int32 RoundTripTime { get; set; }
         /// <summary>
         /// Effective size of the congestion queue
         /// </summary>
-        protected UInt16 EffectiveWindow 
+        protected UInt16 EffectiveWindow
         {
             get
             {
-                rw_ackQueue.EnterReadLock();
-				rw_congestionWindow.EnterReadLock ();
-                var v = (UInt16) (CongestionWindowSize - ackQueue.Count);
-				rw_congestionWindow.ExitReadLock ();
-                rw_ackQueue.ExitReadLock();
+                rw_congestionWindow.EnterReadLock();
+				var v = (UInt16)(CongestionWindowSize - acks.Count);
+                rw_congestionWindow.ExitReadLock();
                 return v;
             }
         }
@@ -68,17 +75,17 @@ namespace Tunneler.Comms
         /// <summary>
         /// Interval at which acks, congestion, timeouts etc are calculated in milliseconds
         /// </summary>
-        internal double  Interval { get; private set; }
+        internal double Interval { get; private set; }
 
         /// <summary>
         /// Max transmission size (maybe make this adjustable)?
         /// </summary>
         internal UInt16 DatagramSize { get; private set; }
 
-		/// <summary>
-		/// Number of times to retransmit before its considered a timeout
-		/// </summary>
-		/// <value>The retransmit interval.</value>
+        /// <summary>
+        /// Number of times to retransmit before its considered a timeout
+        /// </summary>
+        /// <value>The retransmit interval.</value>
         protected int RetransmitInterval { get; set; }
 
         /// <summary>
@@ -95,55 +102,84 @@ namespace Tunneler.Comms
             this.timer = new Timer(this.Interval);
             this.timer.Elapsed += TimerOnElapsed;
             this.packetSender = packetSender;
-
-            this.sendQueue = new LinkedList<TimestampedPacket>();
-			this.ackQueue = new HashDictionary<uint, TimestampedPacket> ();
-			this.RetransmitInterval = retransmitInterval;
+			//todo: convert the ackqueue to use this concurrent dictionary and eliminate the 
+			//locks
+			acks = new ConcurrentDictionary<uint, TimestampedPacket>();
+            this.sendQueue = new ConcurrentQueue<TimestampedPacket>();
+            this.RetransmitInterval = retransmitInterval;
+            this.RoundTripTime = 1;
+            this.timer.Start();
         }
 
         private void TimerOnElapsed(object sender, ElapsedEventArgs elapsedEventArgs)
         {
-			int timeoutCount = 0;
-            rw_sendQueue.EnterWriteLock();
+
             //send anything left in the queue
             if (EffectiveWindow > 0 && sendQueue.Count > 0)
             {
                 int toSend = sendQueue.Count - EffectiveWindow;
                 while (EffectiveWindow > 0 && toSend > 0)
                 {
-                    TimestampedPacket timestampedPacket = sendQueue.Dequeue();
-                    this.packetSender.SendPacket(timestampedPacket.packet);
-                    timestampedPacket.lastTransmissionTime = Environment.TickCount;
-                }
-            }
-            rw_sendQueue.ExitWriteLock();
-            rw_ackQueue.EnterReadLock();
-            //search over the ackqueue and look for anything that is over the transmission timeout to retransmit
-            for (uint i = 0; i < ackQueue.Count; i++)
-            {
-				TimestampedPacket tsp = ackQueue[i];
-                if (tsp.lastTransmissionTime - Environment.TickCount > RetransmitInterval)
-                {
-                    this.packetSender.SendPacket(tsp.packet);
-                    tsp.lastTransmissionTime = Environment.TickCount;
-                    tsp.retransmissionCount++;
-					if (tsp.retransmissionCount > this.RetransmitInterval) {
-						tsp.timedOut = true;
-						timeoutCount++;
+
+					TimestampedPacket timestampedPacket;
+					if (this.sendQueue.TryDequeue (out timestampedPacket)) {
+						this.SendTimestampedPacket (timestampedPacket);
 					}
                 }
             }
-            rw_ackQueue.ExitReadLock();
-			if(timeoutCount > 0){
-				OnPacketDropped (ackQueue.Count, timeoutCount);
+            
+            //search over the ackqueue and look for anything that is over the transmission timeout to retransmit
+			var enumerator = acks.GetEnumerator ();
+			while(enumerator.MoveNext ()){
+				TimestampedPacket tsp = enumerator.Current.Value;
+				int tick = Environment.TickCount - tsp.lastTransmissionTime;
+
+				if ( tick >= RetransmitInterval)
+				{
+					Console.WriteLine(String.Format("Resending packet Seq#:{0}", tsp.packet.Seq));
+					this.packetSender.SendPacket(tsp.packet);
+					tsp.lastTransmissionTime = Environment.TickCount;
+					tsp.retransmissionCount++;
+					if (tsp.retransmissionCount > this.RetransmitInterval)
+					{
+						tsp.timedOut = true;
+						this.PacketDropped(tsp.retransmissionCount, tsp.lastTransmissionTime);
+					}
+				}
 			}
+            /*for (uint i = 0; i < acks.Count; i++)
+            {
+				Console.WriteLine ("Resending");
+				TimestampedPacket tsp = acks.GetEnumerator ().
+				int tick = Environment.TickCount - tsp.lastTransmissionTime;
+
+				if ( tick >= RetransmitInterval)
+                {
+                    Console.WriteLine(String.Format("Resending packet Seq#:{0}", tsp.packet.Seq));
+                    this.packetSender.SendPacket(tsp.packet);
+                    tsp.lastTransmissionTime = Environment.TickCount;
+                    tsp.retransmissionCount++;
+                    if (tsp.retransmissionCount > this.RetransmitInterval)
+                    {
+                        tsp.timedOut = true;
+                        this.PacketDropped(tsp.retransmissionCount, tsp.lastTransmissionTime);
+                    }
+                }
+            }*/
+         
         }
 
-		internal void ChangeCongestionWindow(UInt16 newWindow){
-			rw_congestionWindow.EnterWriteLock ();
-			this.CongestionWindowSize = newWindow;
-			rw_congestionWindow.ExitWriteLock ();
-		}
+        internal void PacketDropped(int retryCount, int timeoutMilliseconds)
+        {
+            this.OnPacketsDropped(retryCount, timeoutMilliseconds);
+        }
+
+        internal void ChangeCongestionWindow(UInt16 newWindow)
+        {
+            rw_congestionWindow.EnterWriteLock();
+            this.CongestionWindowSize = newWindow;
+            rw_congestionWindow.ExitWriteLock();
+        }
 
         /// <summary>
         /// Enqueues a packet to be sent out the wire
@@ -155,39 +191,70 @@ namespace Tunneler.Comms
             tsp.packet = packet;
             tsp.lastTransmissionTime = Int32.MinValue;
             tsp.retransmissionCount = 0;
-			tsp.timedOut = false;
+            tsp.timedOut = false;
 
-            if (EffectiveWindow > 0)
-            {
-                //todo: have the packet sender itself manage applying the timestamp (in this case the tunnelsocket which may need to be made threadsafe)
-                this.packetSender.SendPacket(tsp.packet);
-                tsp.lastTransmissionTime = Environment.TickCount;
-
-                rw_ackQueue.EnterWriteLock();
-				ackQueue.Add(tsp.packet.Seq, tsp);
-                rw_ackQueue.ExitWriteLock();
-            }
-            else
-            {
-                rw_sendQueue.EnterWriteLock();
-                sendQueue.Enqueue(tsp);
-                rw_sendQueue.ExitWriteLock();
-            }
+			SendTimestampedPacket (tsp);
         }
 
-		protected abstract void OnAcked (TimestampedPacket acked);
-		protected abstract void OnPacketDropped(int totalPackets, int packetsDropped);
-
-		internal void Acked(UInt32 id){
-			rw_ackQueue.EnterWriteLock ();
-			TimestampedPacket output;
-			ackQueue.Remove (id, out output);
-			rw_ackQueue.ExitWriteLock ();
-			OnAcked (output);
+		void SendTimestampedPacket (TimestampedPacket tsp)
+		{
+			if (EffectiveWindow > 0) {
+				//todo: have the packet sender itself manage applying the timestamp (in this case the tunnelsocket which may need to be made threadsafe)
+				tsp.lastTransmissionTime = Environment.TickCount;
+				if (tsp.initialTransmissionTime == Int32.MinValue)
+					tsp.initialTransmissionTime = tsp.lastTransmissionTime;
+				acks.TryAdd (tsp.packet.Seq, tsp);
+				this.packetSender.SendPacket (tsp.packet);
+			}
+			else {
+				sendQueue.Enqueue (tsp);
+			}
 		}
 
-		internal void SendAck(GenericPacket packet){
-			this.packetSender.SendPacket (packet);
-		}
+        /// <summary>
+        /// Ensure that the packet can be handled in order. 
+        /// </summary>
+        /// <returns><c>true</c>, if packet was handled, <c>false</c> otherwise.</returns>
+        /// <param name="packet">Packet.</param>
+        internal bool CheckPacket(GenericPacket packet)
+        {
+            if (packet.Ack != 0)
+            {
+                this.Acked(packet.Ack);
+            }
+
+            if (lastSeqNum + 1 == packet.Seq)
+            {
+                lastSeqNum = packet.Seq;
+                return true;
+            }
+            return false;
+        }
+
+        protected abstract void OnAcked(TimestampedPacket acked);
+        protected abstract void OnPacketsDropped(int totalPackets, int packetsDropped);
+
+        internal void Acked(UInt32 id)
+        {
+            TimestampedPacket output;
+			bool removed = acks.TryRemove (id, out output);
+			Debug.Assert (removed, "Couldn't remove the seq id");
+			Debug.Assert (this.EffectiveWindow > 0);
+            OnAcked(output);
+        }
+
+        internal void RecalculateRTT(TimestampedPacket ackedPacket, Int32 timestamp)
+        {
+            rw_rttCalc.EnterWriteLock();
+            //optomistic calculation that assumes the last transmit is more indiciative of 
+            //future transmits in terms of RTT
+            this.RoundTripTime = (int)(RTT_CONST * this.RoundTripTime) + (int)((1 - RTT_CONST) * (ackedPacket.lastTransmissionTime - timestamp));
+            rw_rttCalc.ExitWriteLock();
+        }
+
+        internal void SendAck(GenericPacket packet)
+        {
+            this.packetSender.SendPacket(packet);
+        }
     }
 }

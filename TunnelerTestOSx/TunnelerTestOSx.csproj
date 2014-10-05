@@ -41,6 +41,7 @@
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>
     <Folder Include="Mock\" />
+    <Folder Include="CongestionTests\" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\TunnelerTestWin\mocks\TunnelMock.cs">
@@ -63,6 +64,24 @@
     </Compile>
     <Compile Include="..\TunnelerTestWin\TunnelSocketTest.cs">
       <Link>TunnelSocketTest.cs</Link>
+    </Compile>
+    <Compile Include="..\TunnelerTestWin\CongestionTests\AIMDCongestionTest.cs">
+      <Link>CongestionTests\AIMDCongestionTest.cs</Link>
+    </Compile>
+    <Compile Include="..\TunnelerTestWin\CongestionTests\SimpleCongestionControlTest.cs">
+      <Link>CongestionTests\SimpleCongestionControlTest.cs</Link>
+    </Compile>
+    <Compile Include="..\TunnelerTestWin\mocks\GenericPacketMock.cs">
+      <Link>Mock\GenericPacketMock.cs</Link>
+    </Compile>
+    <Compile Include="..\TunnelerTestWin\CongestionTests\CongestionReliablityTestBase.cs">
+      <Link>CongestionTests\CongestionReliablityTestBase.cs</Link>
+    </Compile>
+    <Compile Include="..\TunnelerTestWin\CongestionTests\CongestionControlTestBase.cs">
+      <Link>CongestionTests\CongestionControlTestBase.cs</Link>
+    </Compile>
+    <Compile Include="..\TunnelerTestWin\mocks\TunnelCongestionControllerMock.cs">
+      <Link>Mock\TunnelCongestionControllerMock.cs</Link>
     </Compile>
   </ItemGroup>
   <ItemGroup>

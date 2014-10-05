@@ -33,33 +33,35 @@ namespace Tunneler
         //private static Logger logger = LogManager.GetCurrentClassLogger();
 
         //locks
-        private ReaderWriterLockSlim port_lock = new ReaderWriterLockSlim();
+        protected ReaderWriterLockSlim port_lock = new ReaderWriterLockSlim();
         //private ReaderWriterLockSlim recv_window_lock = new ReaderWriterLockSlim ();
 
         //autoreset events
         protected AutoResetEvent readerEvent = new AutoResetEvent(false);
+        protected AutoResetEvent icmpEvent = new AutoResetEvent (false);
 
-        private short port;
-        private bool isOn = false;
+        protected short port;
+        protected bool isOn = false;
 
         //private Socket outputSocket;
-        private Socket socket;
+        protected Socket socket;
+        //protected Socket icmp;
 
         //this needs to be moved to the abstractTunnel
-        private UInt16 mtu = 2048;
+        protected UInt16 mtu = 2048;
 
         /// <summary>
         /// Local endpoint
         /// </summary>
-        private IPEndPoint ep;
+        protected IPEndPoint ep;
         /// <summary>
         /// Thread that handles recieving data
         /// </summary>
-        private Thread receiverThread;
+        protected Thread receiverThread;
         /// <summary>
         /// Internal abstractTunnel directory for passing packets to.
         /// </summary>
-        public TunnelDirectory mTunnelDirectory = new TunnelDirectory();
+        internal TunnelDirectory mTunnelDirectory = new TunnelDirectory();
 
         public IPEndPoint LocalEndPoint
         {
@@ -95,7 +97,6 @@ namespace Tunneler
         /// </summary>
         public TunnelSocket()
         {
-
         }
 
         /// <summary>
@@ -105,10 +106,8 @@ namespace Tunneler
         public TunnelSocket(short port)
         {
             //logger.Debug(String.Format("Creating a new tunnel socket on port: {0}", port));
+            //convert this ip endpoint setup to use the DNS resolver
             this.Port = port;
-            socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            ep = new IPEndPoint(IPAddress.Parse("127.0.0.1"), port);
-            socket.Bind(ep);
         }
 
         /// <summary>
@@ -151,12 +150,19 @@ namespace Tunneler
         }
 
         /// <summary>
-        /// Starts the SecureAbstractTunnel Socket on a new thread
+        /// Initializes the socket and starts the SecureAbstractTunnel Socket on a new thread
         /// </summary>
-        public void Start()
+        public virtual void Start()
         {
+            socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            //icmp = new Socket (AddressFamily.InterNetwork, SocketType.Raw, ProtocolType.Icmp);
+            //this.socket.DontFragment = true;
+            ep = new IPEndPoint(IPAddress.Parse("127.0.0.1"), port);
+            socket.Bind(ep);
+            //icmp.Bind (ep);
+
             isOn = true;
-            ThreadStart start = new ThreadStart(StartRecievingPackets);
+            ThreadStart start = new ThreadStart(StartRecievingUDPDatagrams);
             receiverThread = new Thread(start);
             receiverThread.Start();
         }
@@ -164,7 +170,7 @@ namespace Tunneler
         /// <summary>
         /// Closes the tunnels, cleans up the threads and frees the socket.
         /// </summary>
-        public void Close()
+        public virtual void Close()
         {
             this.mTunnelDirectory.CloseAllTunnels();
             this.socket.Close();
@@ -185,6 +191,7 @@ namespace Tunneler
         public virtual void SendPacket(GenericPacket p)
         {
             byte[] buffer = p.ToBytes();
+            
             this.socket.BeginSendTo(buffer,
                     0,
                     buffer.Length,
@@ -201,12 +208,21 @@ namespace Tunneler
                                         p);*/
         }
 
-        private void OnPacketSent(IAsyncResult ar)
+        protected void OnPacketSent(IAsyncResult ar)
         {
             Console.WriteLine("GenericPacket sent....");
         }
 
-        private void StartRecievingPackets()
+        private void StartRecievingICMPDatagrams()
+        {
+            while(this.isOn)
+            {
+                icmpEvent.Reset ();
+                byte[] buffer = new byte[4096];
+            }
+        }
+
+        private void StartRecievingUDPDatagrams()
         {
             while (this.isOn)
             {
@@ -232,7 +248,7 @@ namespace Tunneler
             readerEvent.Set();
         }
 
-        public void HandlePacket(EncryptedPacket packet)
+        internal void HandlePacket(EncryptedPacket packet)
         {
             Console.WriteLine(String.Format("GenericPacket received {0}", Encoding.UTF8.GetString(packet.rawBytes, 0, packet.rawBytes.Length)));
             TunnelBase t = null;
@@ -243,7 +259,7 @@ namespace Tunneler
             else if (packet.HasEPK)
             {
                 //open a new abstractTunnel
-                //todo: we need some way of specifying which abstractTunnel type we're going 
+                //todo: we need some way of specifying which abstractTunnel type we're creating
                 //to be using here.;
                 t = new SecureTunnel(this);
                 t.ID = packet.TID;

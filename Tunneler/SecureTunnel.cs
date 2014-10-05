@@ -214,28 +214,29 @@ namespace Tunneler
                         this.EncryptAndSendPacket(this.bufferedEncryptedPackets.Dequeue());
                     }
                     break;
-				case TunnelState.Connected:
-					Debug.Assert (recipentEPK != null);
-					if (p.CipherText.Length > 0) {
+                case TunnelState.Connected:
+                    Debug.Assert (recipentEPK != null);
+                    if (p.CipherText.Length > 0) {
 						if (p.DecryptPacket (mKeyPair.PrivateKey, recipentEPK)) {
-							//todo: handle out of order packets here and send acks
-							PipeBase connection;
-							UInt32 cid = p.CID;
-							if (p.Ack > 0) {
-								this.congestionController.Acked (p.Ack);
-							}
-							//only handle packets that have a payload or RPCs
-							if (p.Payload.Length > 0 || p.RPCs.Count > 0) {
-								if (cid == 0) {
-									ControlPipe.HandlePacket (p);
-								} else {
-									if (ActivePipes.Find (ref cid, out connection)) {
-										connection.HandlePacket (p);
+							if (congestionController.CheckPacket (p)) {
+								PipeBase connection;
+								UInt32 cid = p.CID;
+								if (p.Ack > 0) {
+									this.SendAck (p.Ack);
+								}
+								//only handle packets that have a payload or RPCs
+								if (p.Payload.Length > 0 || p.RPCs.Count > 0) {
+									if (cid == 0) {
+										ControlPipe.HandlePacket (p);
+									} else {
+										if (ActivePipes.Find (ref cid, out connection)) {
+											connection.HandlePacket (p);
+										}
 									}
 								}
 							}
 						}
-					}
+                    }
                     break;
                 default:
                     throw new ArgumentOutOfRangeException();
@@ -249,19 +250,19 @@ namespace Tunneler
             this.congestionController.SendPacket(p);
         }
 
-		/// <summary>
-		/// Sends a single Ack out 
-		/// </summary>
-		/// <param name="seq">Seq.</param>
-		private void SendAck(UInt32 seq){
-			EncryptedPacket p = new EncryptedPacket (this.ID, 0);
-			p.Ack = seq;
-			//How should we handle ack packets? Should we add them to the Ack queue?
-			p.Nonce = GetNextNonce();
-			p.Seq = this.GetNextSeq();
-			p.EncryptPacket(mKeyPair.PrivateKey, recipentEPK);
-			this.congestionController.SendAck (p);
-		}
+        /// <summary>
+        /// Sends a single Ack out. 
+        /// </summary>
+        /// <param name="seq">Seq.</param>
+        private void SendAck(UInt32 seq){
+            EncryptedPacket p = new EncryptedPacket (this.ID, 0);
+            p.Ack = seq;
+            //How should we handle ack packets? Should we add them to the Ack queue?
+            p.Nonce = GetNextNonce();
+            p.Seq = this.GetNextSeq();
+            p.EncryptPacket(mKeyPair.PrivateKey, recipentEPK);
+            this.congestionController.SendAck (p);
+        }
 
         public EncryptedPacket MakeHelloPacket()
         {

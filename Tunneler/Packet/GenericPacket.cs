@@ -248,7 +248,7 @@ namespace Tunneler.Packet
             tidWithFlags = tid = 0;
             byte[] nonce = new byte[24];
             //todo: clean up the GenericPacket classes to allow us to do this without 
-			UInt32 seq, ack;
+            UInt32 seq, ack;
             seq = ack = 0;
             byte[] epk = null, puzzle = null;
             bool hasPK, hasPuzzle;
@@ -389,7 +389,7 @@ namespace Tunneler.Packet
             }
 
        
-		}
+        }
 
         /// <summary>
         /// Generates the raw bytes
