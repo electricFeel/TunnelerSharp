@@ -218,6 +218,10 @@ namespace Tunneler
                     Debug.Assert (recipentEPK != null);
                     if (p.CipherText.Length > 0) {
 						if (p.DecryptPacket (mKeyPair.PrivateKey, recipentEPK)) {
+							if(congestionController.CheckResendAck (p)){
+								Console.WriteLine ("Resending ack");
+								this.SendAck (p.Ack);
+							}
 							if (congestionController.CheckPacket (p)) {
 								PipeBase connection;
 								UInt32 cid = p.CID;

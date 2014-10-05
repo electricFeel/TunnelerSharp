@@ -10,6 +10,10 @@ using System.Collections;
 
 namespace Tunneler.Comms
 {
+	/// <summary>
+	/// Timestamped packet carries additional information
+	/// to simplify determining which packets need to be resent.
+	/// </summary>
     public struct TimestampedPacket
     {
         internal GenericPacket packet;
@@ -94,7 +98,9 @@ namespace Tunneler.Comms
         /// <param name="congestionWindowSize"></param>
         /// <param name="interval"></param>
         /// <param name="datagramSize"></param>
-        internal CongestionControlBase(IPacketSender packetSender, UInt16 interval, UInt16 datagramSize, UInt16 congestionWindowSize = 1, int retransmitInterval = 500)
+        internal CongestionControlBase(IPacketSender packetSender, UInt16 interval, 
+									   UInt16 datagramSize, UInt16 congestionWindowSize = 1, 
+									   int retransmitInterval = 500)
         {
             this.CongestionWindowSize = congestionWindowSize;
             this.Interval = interval;
@@ -176,6 +182,7 @@ namespace Tunneler.Comms
 
         internal void ChangeCongestionWindow(UInt16 newWindow)
         {
+			Console.WriteLine (String.Format ("Changing window size from {0} to {1}", this.CongestionWindowSize, newWindow));
             rw_congestionWindow.EnterWriteLock();
             this.CongestionWindowSize = newWindow;
             rw_congestionWindow.ExitWriteLock();
@@ -211,6 +218,13 @@ namespace Tunneler.Comms
 			}
 		}
 
+
+		internal bool CheckResendAck(GenericPacket p)
+		{
+			if (p.Seq > 0 && p.Seq <= lastSeqNum)
+				return true;
+			return false;
+		}
         /// <summary>
         /// Ensure that the packet can be handled in order. 
         /// </summary>

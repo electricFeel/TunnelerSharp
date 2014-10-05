@@ -16,7 +16,7 @@ namespace TunnelerTestWin
         public void Setup()
         {
             socketMock = new TunnelSocketMock();
-            congestion = new AIMDCongestionControl(socketMock, 50, 576, 1, 50, 5);
+            congestion = new AIMDCongestionControl(socketMock, 25, 576, 1, 25, 5);
         }
 
         [Test]

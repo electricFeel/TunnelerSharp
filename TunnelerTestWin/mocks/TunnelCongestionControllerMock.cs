@@ -40,7 +40,12 @@ namespace TunnelerTestWin
                 GenericPacket ackPacket = new GenericPacketMock(0);
                 ackPacket.Ack = p.Seq;
                 congestionController.SendAck(ackPacket);
-            }
+			}else if(congestionController.CheckResendAck(p)){
+				Console.WriteLine(String.Format("Resending ACK because this is an already accepted packet out of order Seq#{0} Ack#{1}", p.Seq, p.Ack));
+				GenericPacket ackPacket = new GenericPacketMock (0);
+				ackPacket.Ack = p.Seq;
+				congestionController.SendAck (ackPacket);
+			}
 			else if(p.Seq != 0)
             {
                 Console.WriteLine(String.Format("Packet IGNORED because its out of order Seq#{0} Ack#{1}", p.Seq, p.Ack));

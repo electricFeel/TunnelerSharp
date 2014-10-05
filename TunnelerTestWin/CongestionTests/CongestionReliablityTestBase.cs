@@ -145,7 +145,10 @@ namespace TunnelerTestWin
 					int size = 576-8-80;
 					uint seq = 1;
 					ArrayList<GenericPacketMock> packets = new ArrayList<GenericPacketMock>();
-					for(int i = 0; i < (int)Math.Ceiling ((double)(txt.Length/size)); i++){
+					int numPackets = txt.Length / size;
+					int overFlow = txt.Length % size;
+					if(overFlow > 0) numPackets += 1;
+					for(int i = 0; i < numPackets; i++){
 						int sizeSubArray = Math.Min (size, txt.Length - (i * size));
 						byte[] sub = new byte[sizeSubArray];
 						Array.Copy (txt, i*size, sub, 0, sizeSubArray);
@@ -159,7 +162,7 @@ namespace TunnelerTestWin
 					}
                 }));
             testThread.Start();
-            Thread.Sleep(4000);
+            Thread.Sleep(1000);
 			Assert.IsTrue (this.sendText.Equals (buildString.ToString ()), buildString.ToString ());
         }
 
